@@ -100,19 +100,34 @@ let activeSearchQuery = '';
 // DOM ELEMENTS
 const productsGrid = document.getElementById('products-grid');
 const cartDrawer = document.getElementById('cart-drawer');
+const mobileMenuDrawer = document.getElementById('mobile-menu-drawer');
 const drawerOverlay = document.getElementById('drawer-overlay');
+
 const cartToggle = document.getElementById('cart-toggle');
 const cartClose = document.getElementById('cart-close');
+const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+const mobileMenuClose = document.getElementById('mobile-menu-close');
+
 const cartCounter = document.getElementById('cart-counter');
 const cartItemsContainer = document.getElementById('cart-items-container');
 const cartTotalEl = document.getElementById('cart-total');
+
 const shippingStatusEl = document.getElementById('shipping-status');
 const shippingProgressEl = document.getElementById('shipping-progress');
 const shippingHintEl = document.getElementById('shipping-hint');
+
 const searchToggle = document.getElementById('search-toggle');
 const searchBox = document.getElementById('search-box');
 const searchInput = document.getElementById('search-input');
 const searchBtn = document.getElementById('search-btn');
+
+// AI Chat DOM elements
+const aiBubble = document.getElementById('ai-chat-bubble');
+const aiDrawer = document.getElementById('ai-chat-drawer');
+const aiClose = document.getElementById('ai-chat-close');
+const aiMessagesContainer = document.getElementById('ai-messages-container');
+const aiInput = document.getElementById('ai-input');
+const aiSendBtn = document.getElementById('ai-send-btn');
 
 // INITIALIZE APP
 document.addEventListener('DOMContentLoaded', () => {
@@ -126,7 +141,23 @@ function setupEventListeners() {
     // Drawer handlers
     cartToggle.addEventListener('click', openCart);
     cartClose.addEventListener('click', closeCart);
-    drawerOverlay.addEventListener('click', closeCart);
+    
+    mobileMenuToggle.addEventListener('click', openMobileMenu);
+    mobileMenuClose.addEventListener('click', closeMobileMenu);
+    
+    drawerOverlay.addEventListener('click', () => {
+        closeCart();
+        closeMobileMenu();
+        closeAiChat();
+    });
+
+    // AI Chat UI Toggles
+    aiBubble.addEventListener('click', openAiChat);
+    aiClose.addEventListener('click', closeAiChat);
+    aiSendBtn.addEventListener('click', sendAiMessage);
+    aiInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendAiMessage();
+    });
 
     // Search Toggle
     searchToggle.addEventListener('click', () => {
@@ -358,6 +389,66 @@ function openCart() {
 function closeCart() {
     cartDrawer.classList.remove('active');
     drawerOverlay.classList.remove('active');
+}
+
+// MOBILE MENU ACTIONS
+function openMobileMenu() {
+    mobileMenuDrawer.style.left = "0";
+    drawerOverlay.classList.add('active');
+}
+
+window.closeMobileMenu = function() {
+    mobileMenuDrawer.style.left = "-450px";
+    drawerOverlay.classList.remove('active');
+}
+
+// AI CHAT ACTIONS
+function openAiChat() {
+    aiDrawer.classList.add('active');
+    drawerOverlay.classList.add('active');
+}
+
+function closeAiChat() {
+    aiDrawer.classList.remove('active');
+    drawerOverlay.classList.remove('active');
+}
+
+// SIMULATED AI CHAT RESPONSES
+function sendAiMessage() {
+    const message = aiInput.value.trim();
+    if (!message) return;
+
+    // Append user message bubble
+    appendChatMessage(message, 'user');
+    aiInput.value = '';
+
+    // Typing simulation delay
+    setTimeout(() => {
+        let aiResponse = "No estoy seguro de haber entendido, pero puedes hablar directamente con nuestro equipo de atención al cliente haciendo clic en el botón de WhatsApp abajo.";
+        const lowercaseMsg = message.toLowerCase();
+
+        if (lowercaseMsg.includes('envio') || lowercaseMsg.includes('gratis') || lowercaseMsg.includes('costo')) {
+            aiResponse = "¡Sí! El envío es **completamente gratuito** en compras que superen los **$250.000**. Puedes ver tu progreso en la barra superior dentro de tu carrito de compras.";
+        } else if (lowercaseMsg.includes('cuotas') || lowercaseMsg.includes('pago') || lowercaseMsg.includes('interes')) {
+            aiResponse = "Ofrecemos **3 cuotas sin interés** en todos los productos de nuestro catálogo. Aceptamos tarjetas Visa, Mastercard, American Express y transferencias bancarias.";
+        } else if (lowercaseMsg.includes('hola') || lowercaseMsg.includes('buenos dias') || lowercaseMsg.includes('buenas tardes')) {
+            aiResponse = "¡Hola! ¿Cómo estás? Estoy aquí para ayudarte a elegir tus productos de **Tosco Almacén de Moda**. ¿Qué estás buscando hoy?";
+        } else if (lowercaseMsg.includes('talle') || lowercaseMsg.includes('talla') || lowercaseMsg.includes('medida')) {
+            aiResponse = "En cada tarjeta de producto mostramos los talles disponibles. Si necesitas ayuda con las medidas exactas de alguna prenda de *Puro* o *Winndia*, haz clic en el botón de WhatsApp y un humano te asesorará.";
+        } else if (lowercaseMsg.includes('puro') || lowercaseMsg.includes('agosti') || lowercaseMsg.includes('winndia')) {
+            aiResponse = "¡Excelentes marcas! En **Tosco** somos distribuidores oficiales de *Puro* (zapatillas artísticas), *Antonia Agosti* (carteras y accesorios de diseño) y *Winndia* (calzado premium de cuero).";
+        }
+
+        appendChatMessage(aiResponse, 'ai');
+    }, 1000);
+}
+
+function appendChatMessage(text, sender) {
+    const msgEl = document.createElement('div');
+    msgEl.className = `chat-bubble ${sender}`;
+    msgEl.innerHTML = text;
+    aiMessagesContainer.appendChild(msgEl);
+    aiMessagesContainer.scrollTop = aiMessagesContainer.scrollHeight;
 }
 
 // SHIPPING CALCULATION

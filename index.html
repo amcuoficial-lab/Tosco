@@ -8,10 +8,10 @@
     <!-- FontAwesome icons for clean modern layout -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
+<body class="loading-animation">
 
     <!-- PROMOTIONAL SCROLLING BAR -->
-    <div class="promo-bar">
+    <div class="promo-bar animate-fade">
         <div class="promo-track">
             <span class="promo-item">-3 CUOTAS SIN INTERÉS-</span>
             <span class="promo-item">ENVÍO GRATIS EN COMPRAS MAYORES A $250.000</span>
@@ -27,8 +27,13 @@
     </div>
 
     <!-- MAIN HEADER -->
-    <header id="main-header">
+    <header id="main-header" class="animate-slide-down">
         <div class="header-container">
+            <!-- Mobile Menu Toggle -->
+            <button class="action-btn" id="mobile-menu-toggle" aria-label="Menú Móvil">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+
             <!-- Navigation Links (Desktop Mega Menu) -->
             <nav class="nav-desktop">
                 <div class="nav-item">
@@ -66,9 +71,9 @@
                 <a href="#" class="nav-item" onclick="setCatalogFilter('terra')">Terra</a>
             </nav>
 
-            <!-- Store Logo (Tosco Serif Style) -->
+            <!-- Store Logo (Tosco Custom Logo from Desktop) -->
             <div class="logo">
-                <a href="/">TOSCO</a>
+                <a href="/"><img src="assets/logo.webp" alt="TOSCO Almacén de Moda" id="store-logo-img"></a>
             </div>
 
             <!-- Action Controls -->
@@ -96,7 +101,7 @@
     </div>
 
     <!-- HERO HOME SLIDER -->
-    <section class="hero">
+    <section class="hero animate-fade">
         <div class="hero-slide" style="background-image: url('assets/hero_tosco.png');">
             <div class="hero-overlay"></div>
             <div class="hero-content">
@@ -108,7 +113,7 @@
     </section>
 
     <!-- THREE BRAND BANNERS -->
-    <section style="padding: 60px 0;">
+    <section style="padding: 60px 0;" class="animate-fade">
         <div class="banners-grid">
             <div class="banner-card" onclick="setCatalogBrand('Puro')">
                 <img src="assets/puro_sneakers.png" alt="PURO Coleccion">
@@ -135,7 +140,7 @@
     </section>
 
     <!-- PRODUCT DISPLAY SECTION -->
-    <section id="catalog-section" style="padding-bottom: 80px;">
+    <section id="catalog-section" style="padding-bottom: 80px;" class="animate-fade">
         <h2 class="section-title">Indumentaria y Más</h2>
         
         <div class="products-container">
@@ -158,6 +163,24 @@
 
     <!-- DRAWER OVERLAY -->
     <div class="drawer-overlay" id="drawer-overlay"></div>
+
+    <!-- MOBILE MENU SIDEBAR DRAWER -->
+    <div class="drawer" id="mobile-menu-drawer" style="left: -450px; right: auto;">
+        <div class="drawer-header">
+            <h3 class="drawer-title">Menú</h3>
+            <button class="drawer-close" id="mobile-menu-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="drawer-content">
+            <ul class="footer-links" style="font-size: 16px; line-height: 2.5;">
+                <li><a href="#" onclick="setCatalogFilter('all'); closeMobileMenu();">Inicio</a></li>
+                <li><a href="#" onclick="setCatalogFilter('calzado'); closeMobileMenu();">Calzado</a></li>
+                <li><a href="#" onclick="setCatalogFilter('bolsos-y-mochilas'); closeMobileMenu();">Bolsos y Mochilas</a></li>
+                <li><a href="#" onclick="setCatalogFilter('accesorios'); closeMobileMenu();">Accesorios</a></li>
+                <li><a href="#" onclick="setCatalogFilter('indumentaria'); closeMobileMenu();">Indumentaria</a></li>
+                <li><a href="#" onclick="setCatalogFilter('terra'); closeMobileMenu();">Terra</a></li>
+            </ul>
+        </div>
+    </div>
 
     <!-- CART SIDEBAR DRAWER -->
     <div class="drawer" id="cart-drawer">
@@ -186,6 +209,40 @@
         </div>
     </div>
 
+    <!-- FLOATING AI CHAT BUBBLE -->
+    <button id="ai-chat-bubble" class="ai-bubble-btn" aria-label="Chat con IA">
+        <i class="fa-solid fa-comment-dots"></i>
+    </button>
+
+    <!-- AI CHAT DRAWER -->
+    <div class="drawer" id="ai-chat-drawer">
+        <div class="drawer-header" style="background-color: var(--main-foreground); color: white;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-robot" style="font-size: 20px;"></i>
+                <div>
+                    <h3 class="drawer-title" style="font-size: 14px; margin-bottom: 2px;">TOSCO Asistente IA</h3>
+                    <span style="font-size: 10px; opacity: 0.8; display: block;">En línea</span>
+                </div>
+            </div>
+            <button class="drawer-close" id="ai-chat-close" style="color: white;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="drawer-content" id="ai-messages-container" style="background-color: #faf8f5;">
+            <!-- Preloaded welcome msg -->
+            <div class="chat-bubble ai">
+                Hola! 👋 Soy el asistente inteligente de **Tosco Almacén de Moda**. ¿En qué puedo ayudarte hoy?
+            </div>
+        </div>
+        <div style="padding: 15px; border-top: 1px solid var(--gray-medium); display: flex; flex-direction: column; gap: 10px; background: white;">
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="ai-input" placeholder="Pregúntame algo..." style="flex: 1; padding: 10px; border: 1px solid var(--gray-medium); outline: none; font-family: var(--body-font); font-size: 13px;">
+                <button id="ai-send-btn" class="btn-premium" style="padding: 8px 15px;"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+            <a href="https://wa.me/5492284620258" target="_blank" class="human-support-btn">
+                <i class="fa-brands fa-whatsapp"></i> Hablar con un Humano
+            </a>
+        </div>
+    </div>
+
     <!-- FOOTER -->
     <footer>
         <div class="footer-grid">
@@ -197,7 +254,7 @@
                 <div style="display: flex; gap: 15px; font-size: 18px;">
                     <a href="https://instagram.com/toscoalmacendemoda" target="_blank"><i class="fa-brands fa-instagram"></i></a>
                     <a href="https://facebook.com/toscoalmacendemoda" target="_blank"><i class="fa-brands fa-facebook"></i></a>
-                    <a href="https://wa.me/message/DXTDZF2YPHOVF1" target="_blank"><i class="fa-brands fa-whatsapp"></i></a>
+                    <a href="https://wa.me/5492284620258" target="_blank"><i class="fa-brands fa-whatsapp"></i></a>
                 </div>
             </div>
             <div>
@@ -214,7 +271,7 @@
                 <ul class="footer-links" style="font-size: 13px;">
                     <li><i class="fa-solid fa-location-dot" style="margin-right: 8px;"></i> General Paz 2770</li>
                     <li><i class="fa-regular fa-envelope" style="margin-right: 8px;"></i> info@tosco.com.ar</li>
-                    <li><a href="https://wa.me/message/DXTDZF2YPHOVF1" target="_blank"><i class="fa-brands fa-whatsapp" style="margin-right: 8px;"></i> Escribinos por WhatsApp</a></li>
+                    <li><a href="https://wa.me/5492284620258" target="_blank"><i class="fa-brands fa-whatsapp" style="margin-right: 8px;"></i> Escribinos por WhatsApp</a></li>
                 </ul>
             </div>
             <div>
