@@ -309,6 +309,30 @@ async function refreshLocalState() {
 
 // ADMIN PANEL LOGIC ACTIONS
 function setupAdminEventListeners() {
+    // Store Status Toggle Handler
+    const storeStatusToggleBtn = document.getElementById('store-status-toggle-btn');
+    if (storeStatusToggleBtn) {
+        let storeOnline = localStorage.getItem('tosco_store_online') !== 'false';
+        
+        const updateToggleUI = () => {
+            if (storeOnline) {
+                storeStatusToggleBtn.innerText = 'ON';
+                storeStatusToggleBtn.style.backgroundColor = '#27ae60';
+            } else {
+                storeStatusToggleBtn.innerText = 'OFF';
+                storeStatusToggleBtn.style.backgroundColor = '#c0392b';
+            }
+        };
+        
+        updateToggleUI();
+        
+        storeStatusToggleBtn.addEventListener('click', () => {
+            storeOnline = !storeOnline;
+            localStorage.setItem('tosco_store_online', storeOnline ? 'true' : 'false');
+            updateToggleUI();
+        });
+    }
+
     // Products view handlers
     adminSearchInput.addEventListener('input', renderAdminTable);
     
@@ -884,3 +908,17 @@ function importCatalog(e) {
     };
     fileReader.readAsText(file);
 }
+
+window.toggleProductVisibility = async function(productId) {
+    const p = ALL_PRODUCTS.find(item => item.id === productId);
+    if (!p) return;
+    
+    p.visible = p.visible === false ? true : false;
+    
+    try {
+        await dbPutProduct(p);
+        await refreshLocalState();
+    } catch (err) {
+        console.error("Error toggling product visibility: ", err);
+    }
+};

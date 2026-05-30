@@ -298,6 +298,25 @@ function setupEventListeners() {
         detailCloseBtn.addEventListener('click', closeProductDetail);
     }
 
+    const detailModal = document.getElementById('product-detail-modal-container');
+    if (detailModal) {
+        detailModal.addEventListener('click', (e) => {
+            if (e.target === detailModal) closeProductDetail();
+        });
+    }
+    const authModal = document.getElementById('auth-modal-container');
+    if (authModal) {
+        authModal.addEventListener('click', (e) => {
+            if (e.target === authModal) closeAuthModal();
+        });
+    }
+    const checkoutModal = document.getElementById('checkout-modal-container');
+    if (checkoutModal) {
+        checkoutModal.addEventListener('click', (e) => {
+            if (e.target === checkoutModal) closeCheckoutModal();
+        });
+    }
+
     // AI Chat UI Toggles
     aiBubble.addEventListener('click', openAiChat);
     aiClose.addEventListener('click', closeAiChat);
@@ -454,7 +473,7 @@ function renderProducts() {
     productsGrid.innerHTML = '';
     
     // Filtering logic cascade
-    let filtered = ALL_PRODUCTS.filter(p => p.stock === undefined || p.stock > 0);
+    let filtered = ALL_PRODUCTS.filter(p => (p.stock === undefined || p.stock > 0) && p.visible !== false);
     
     if (activeCategory !== 'all') {
         filtered = filtered.filter(p => p.category === activeCategory);
