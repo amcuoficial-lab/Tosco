@@ -224,7 +224,11 @@ let productModalContainer, modalTitle, modalCloseBtn, productForm, formProductId
 let statTotalEl, statOutOfStockEl, statSalesEl, statShippingEl;
 
 // Appearance configuration elements
-let appearanceForm, configLogoInput, configHeroInput, configTickerInput;
+let appearanceForm, configTickerInput, configLogoFile, logoPreviewImg, logoPreviewName, configHeroFile, heroPreviewImg, heroPreviewName;
+
+// Product form image files
+let formImageFile, formImagePreview, formImageFileName;
+
 
 function initDOMElements() {
     loginContainer = document.getElementById('login-container');
@@ -280,9 +284,17 @@ function initDOMElements() {
     statShippingEl = document.getElementById('admin-stat-shipping');
 
     appearanceForm = document.getElementById('appearance-form');
-    configLogoInput = document.getElementById('config-logo');
-    configHeroInput = document.getElementById('config-hero');
     configTickerInput = document.getElementById('config-ticker');
+    configLogoFile = document.getElementById('config-logo-file');
+    logoPreviewImg = document.getElementById('logo-preview-img');
+    logoPreviewName = document.getElementById('logo-preview-name');
+    configHeroFile = document.getElementById('config-hero-file');
+    heroPreviewImg = document.getElementById('hero-preview-img');
+    heroPreviewName = document.getElementById('hero-preview-name');
+
+    formImageFile = document.getElementById('form-image-file');
+    formImagePreview = document.getElementById('form-image-preview');
+    formImageFileName = document.getElementById('form-image-file-name');
 }
 
 
@@ -521,18 +533,59 @@ function setupAdminEventListeners() {
         tabAppearancePane.style.display = 'flex';
 
         // Load current config
-        configLogoInput.value = localStorage.getItem('tosco_custom_logo') || '../assets/logo.webp';
-        configHeroInput.value = localStorage.getItem('tosco_custom_hero') || '../assets/hero_tosco.png';
+        logoPreviewImg.src = localStorage.getItem('tosco_custom_logo') || '../assets/logo.webp';
+        heroPreviewImg.src = localStorage.getItem('tosco_custom_hero') || '../assets/hero_tosco.png';
         configTickerInput.value = localStorage.getItem('tosco_custom_ticker') || '3 CUOTAS SIN INTERÉS | ENVÍO GRATIS SUPERANDO LOS $250.000';
+        logoPreviewName.innerText = "Ningún archivo seleccionado";
+        heroPreviewName.innerText = "Ningún archivo seleccionado";
     });
 
     // Appearance Form Submit
     appearanceForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        localStorage.setItem('tosco_custom_logo', configLogoInput.value.trim());
-        localStorage.setItem('tosco_custom_hero', configHeroInput.value.trim());
+        localStorage.setItem('tosco_custom_logo', logoPreviewImg.src);
+        localStorage.setItem('tosco_custom_hero', heroPreviewImg.src);
         localStorage.setItem('tosco_custom_ticker', configTickerInput.value.trim());
         alert('¡Configuración visual guardada correctamente!');
+    });
+
+    // File change listeners for appearance customization
+    configLogoFile.addEventListener('change', () => {
+        const file = configLogoFile.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                logoPreviewImg.src = ev.target.result;
+                logoPreviewName.innerText = file.name;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    configHeroFile.addEventListener('change', () => {
+        const file = configHeroFile.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                heroPreviewImg.src = ev.target.result;
+                heroPreviewName.innerText = file.name;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // File change listener for product form image
+    formImageFile.addEventListener('change', () => {
+        const file = formImageFile.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                formImagePreview.src = ev.target.result;
+                formImage.value = ev.target.result; // Store Base64 inside hidden form-image input
+                formImageFileName.innerText = file.name;
+            };
+            reader.readAsDataURL(file);
+        }
     });
 }
 
@@ -734,6 +787,7 @@ window.deleteOrder = async function(orderId) {
 // Modal handling
 window.openProductModal = function(productId) {
     productModalContainer.style.display = 'flex';
+    formImageFileName.innerText = 'Ningún archivo seleccionado';
     
     if (productId) {
         // Edit Mode
@@ -750,6 +804,7 @@ window.openProductModal = function(productId) {
         formOriginalPrice.value = p.originalPrice || '';
         formStock.value = p.stock !== undefined ? p.stock : 10;
         formImage.value = p.image;
+        formImagePreview.src = p.image;
         formSizes.value = p.sizes ? p.sizes.join(', ') : 'Único';
         formLabels.value = p.labels ? p.labels.join(', ') : '';
     } else {
@@ -757,6 +812,8 @@ window.openProductModal = function(productId) {
         modalTitle.innerText = "Agregar Nuevo Producto";
         productForm.reset();
         formProductId.value = '';
+        formImagePreview.src = '../assets/hero_tosco.png';
+        formImage.value = '';
     }
 };
 
