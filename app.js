@@ -204,6 +204,10 @@ let activeCategory = 'all';
 let activeSubcategory = '';
 let activeBrand = '';
 let activeSearchQuery = '';
+let apiShippingRates = {
+    Andreani: 9500,
+    'Correo Argentino': 7800
+};
 
 // DOM ELEMENTS
 const productsGrid = document.getElementById('products-grid');
@@ -348,9 +352,38 @@ function dbClearAll() {
     });
 }
 
+// APPLY CUSTOM APPEARANCE FROM LOCALSTORAGE
+function applyCustomAppearance() {
+    const customLogo = localStorage.getItem('tosco_custom_logo');
+    const customHero = localStorage.getItem('tosco_custom_hero');
+    const customTicker = localStorage.getItem('tosco_custom_ticker');
+
+    if (customLogo) {
+        const logoImg = document.getElementById('store-logo-img');
+        if (logoImg) logoImg.src = customLogo;
+    }
+    if (customHero) {
+        const heroBg = document.getElementById('hero-slide-bg');
+        if (heroBg) heroBg.style.backgroundImage = `url('${customHero}')`;
+    }
+    if (customTicker) {
+        const trackContainer = document.getElementById('promo-track-container');
+        if (trackContainer) {
+            trackContainer.innerHTML = '';
+            for (let i = 0; i < 5; i++) {
+                const span1 = document.createElement('span');
+                span1.className = 'promo-item';
+                span1.innerText = `- ${customTicker} -`;
+                trackContainer.appendChild(span1);
+            }
+        }
+    }
+}
+
 // INITIALIZE APP
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        applyCustomAppearance();
         await dbInit();
         await refreshLocalState();
         updateCartUI();
@@ -359,6 +392,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error("Error starting database: ", err);
         // Fallback to offline memory
         ALL_PRODUCTS = INITIAL_PRODUCTS;
+        applyCustomAppearance();
         renderProducts();
         updateCartUI();
         setupEventListeners();
@@ -425,6 +459,37 @@ function setupEventListeners() {
     document.querySelectorAll('input[name="shipping-carrier"]').forEach(radio => {
         radio.addEventListener('change', updateCheckoutTotals);
     });
+
+    const zipInput = document.getElementById('checkout-zip');
+    if (zipInput) {
+        zipInput.addEventListener('input', async () => {
+            const zipVal = zipInput.value.trim();
+            if (zipVal.length >= 4) {
+                try {
+                    const response = await fetch('/api/cotizar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ zip: zipVal })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data && data.options) {
+                            data.options.forEach(opt => {
+                                if (opt.carrier.toLowerCase().includes('andreani')) {
+                                    apiShippingRates.Andreani = opt.cost;
+                                } else if (opt.carrier.toLowerCase().includes('correo') || opt.carrier.toLowerCase().includes('argentino')) {
+                                    apiShippingRates['Correo Argentino'] = opt.cost;
+                                }
+                            });
+                            updateCheckoutTotals();
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error fetching rates: ", err);
+                }
+            }
+        });
+    }
 }
 
 
@@ -759,11 +824,11 @@ function updateCheckoutTotals() {
     const selectedCarrier = document.querySelector('input[name="shipping-carrier"]:checked').value;
     
     const isFree = subtotal >= 250000;
-    const andreaniCost = isFree ? 0 : 9500;
-    const correoCost = isFree ? 0 : 7800;
+    const andreaniCost = isFree ? 0 : (apiShippingRates.Andreani || 9500);
+    const correoCost = isFree ? 0 : (apiShippingRates['Correo Argentino'] || 7800);
 
-    document.getElementById('andreani-cost-display').innerText = isFree ? "Gratis" : "$9.500";
-    document.getElementById('correo-cost-display').innerText = isFree ? "Gratis" : "$7.800";
+    document.getElementById('andreani-cost-display').innerText = isFree ? "Gratis" : `$${andreaniCost.toLocaleString('es-AR')}`;
+    document.getElementById('correo-cost-display').innerText = isFree ? "Gratis" : `$${correoCost.toLocaleString('es-AR')}`;
 
     shippingCost = selectedCarrier === 'Andreani' ? andreaniCost : correoCost;
 
@@ -787,7 +852,7 @@ async function handleCheckoutSubmit(e) {
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const selectedCarrier = document.querySelector('input[name="shipping-carrier"]:checked').value;
     const isFree = subtotal >= 250000;
-    const shippingCost = isFree ? 0 : (selectedCarrier === 'Andreani' ? 9500 : 7800);
+    const shippingCost = isFree ? 0 : (selectedCarrier === 'Andreani' ? (apiShippingRates.Andreani || 9500) : (apiShippingRates['Correo Argentino'] || 7800));
     
     const orderData = {
         date: new Date().toISOString(),

@@ -113,6 +113,7 @@
             <div style="display:flex; gap:10px; background:#ffffff; padding:10px 25px; border-bottom:1px solid var(--gray-medium);">
                 <button class="btn-admin-action primary" id="tab-products-btn" style="border-radius:4px;"><i class="fa-solid fa-box"></i> Productos</button>
                 <button class="btn-admin-action" id="tab-orders-btn" style="border-radius:4px;"><i class="fa-solid fa-receipt"></i> Pedidos y Envíos</button>
+                <button class="btn-admin-action" id="tab-appearance-btn" style="border-radius:4px;"><i class="fa-solid fa-palette"></i> Apariencia</button>
             </div>
             
             <div class="admin-content" style="flex:1; overflow-y:auto;">
@@ -223,6 +224,28 @@
                                 <!-- Loaded via JS -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- APPEARANCE TAB PANE -->
+                <div id="tab-appearance-pane" style="display:none; flex-direction:column; gap:20px; padding: 20px;">
+                    <div style="background:#ffffff; padding:25px; border-radius:6px; border:1px solid var(--gray-medium); display:flex; flex-direction:column; gap:15px; max-width:800px; margin: 0 auto; width:100%;">
+                        <h3 style="font-family:'Lora', serif; font-size:20px; border-bottom:1px solid var(--gray-medium); padding-bottom:10px; margin-bottom:10px; color:var(--main-foreground);"><i class="fa-solid fa-palette"></i> Personalizar Apariencia de la Tienda</h3>
+                        <form id="appearance-form" style="display:flex; flex-direction:column; gap:18px;">
+                            <div class="form-group" style="display:flex; flex-direction:column; gap:6px;">
+                                <label for="config-logo" style="font-size:11px; font-weight:700; color:var(--gray-dark); text-transform:uppercase; letter-spacing:0.5px;">URL del Logotipo</label>
+                                <input type="text" id="config-logo" placeholder="Ej. assets/logo.webp o una URL de imagen" style="padding:10px; border:1px solid var(--gray-medium); border-radius:4px; font-family:'Lato', sans-serif; font-size:13px; outline:none;">
+                            </div>
+                            <div class="form-group" style="display:flex; flex-direction:column; gap:6px;">
+                                <label for="config-hero" style="font-size:11px; font-weight:700; color:var(--gray-dark); text-transform:uppercase; letter-spacing:0.5px;">URL del Banner Principal (Portada)</label>
+                                <input type="text" id="config-hero" placeholder="Ej. assets/hero_tosco.png o una URL de imagen" style="padding:10px; border:1px solid var(--gray-medium); border-radius:4px; font-family:'Lato', sans-serif; font-size:13px; outline:none;">
+                            </div>
+                            <div class="form-group" style="display:flex; flex-direction:column; gap:6px;">
+                                <label for="config-ticker" style="font-size:11px; font-weight:700; color:var(--gray-dark); text-transform:uppercase; letter-spacing:0.5px;">Texto de Barra Promocional Superior</label>
+                                <input type="text" id="config-ticker" placeholder="Ej. 3 CUOTAS SIN INTERÉS | ENVÍO GRATIS SUPERANDO LOS $250.000" style="padding:10px; border:1px solid var(--gray-medium); border-radius:4px; font-family:'Lato', sans-serif; font-size:13px; outline:none;">
+                            </div>
+                            <button type="submit" class="btn-admin-action primary" style="align-self:flex-start; padding: 12px 25px; margin-top:10px; cursor:pointer;"><i class="fa-solid fa-floppy-disk"></i> Guardar Cambios Visuales</button>
+                        </form>
                     </div>
                 </div>
             </div>

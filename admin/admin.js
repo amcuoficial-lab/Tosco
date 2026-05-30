@@ -209,7 +209,7 @@ let loginContainer, loginForm, usernameInput, passwordInput, errorMessage;
 let adminMainView, adminLogoutBtn;
 
 // View Tab Panes and Buttons
-let tabProductsBtn, tabOrdersBtn, tabProductsPane, tabOrdersPane;
+let tabProductsBtn, tabOrdersBtn, tabAppearanceBtn, tabProductsPane, tabOrdersPane, tabAppearancePane;
 
 // Products Table Elements
 let adminProductsTbody, adminSearchInput, adminAddProductBtn, adminExportBtn, adminImportTrigger, adminImportFile, adminResetBtn;
@@ -223,6 +223,9 @@ let productModalContainer, modalTitle, modalCloseBtn, productForm, formProductId
 // Admin stats
 let statTotalEl, statOutOfStockEl, statSalesEl, statShippingEl;
 
+// Appearance configuration elements
+let appearanceForm, configLogoInput, configHeroInput, configTickerInput;
+
 function initDOMElements() {
     loginContainer = document.getElementById('login-container');
     loginForm = document.getElementById('login-form');
@@ -235,8 +238,10 @@ function initDOMElements() {
 
     tabProductsBtn = document.getElementById('tab-products-btn');
     tabOrdersBtn = document.getElementById('tab-orders-btn');
+    tabAppearanceBtn = document.getElementById('tab-appearance-btn');
     tabProductsPane = document.getElementById('tab-products-pane');
     tabOrdersPane = document.getElementById('tab-orders-pane');
+    tabAppearancePane = document.getElementById('tab-appearance-pane');
 
     adminProductsTbody = document.getElementById('admin-products-tbody');
     adminSearchInput = document.getElementById('admin-search-input');
@@ -273,6 +278,11 @@ function initDOMElements() {
     statOutOfStockEl = document.getElementById('admin-stat-out-of-stock');
     statSalesEl = document.getElementById('admin-stat-sales');
     statShippingEl = document.getElementById('admin-stat-shipping');
+
+    appearanceForm = document.getElementById('appearance-form');
+    configLogoInput = document.getElementById('config-logo');
+    configHeroInput = document.getElementById('config-hero');
+    configTickerInput = document.getElementById('config-ticker');
 }
 
 
@@ -485,17 +495,44 @@ function setupAdminEventListeners() {
     tabProductsBtn.addEventListener('click', () => {
         tabProductsBtn.classList.add('primary');
         tabOrdersBtn.classList.remove('primary');
+        tabAppearanceBtn.classList.remove('primary');
         tabProductsPane.style.display = 'flex';
         tabOrdersPane.style.display = 'none';
+        tabAppearancePane.style.display = 'none';
         renderAdminTable();
     });
 
     tabOrdersBtn.addEventListener('click', () => {
         tabOrdersBtn.classList.add('primary');
         tabProductsBtn.classList.remove('primary');
+        tabAppearanceBtn.classList.remove('primary');
         tabProductsPane.style.display = 'none';
         tabOrdersPane.style.display = 'flex';
+        tabAppearancePane.style.display = 'none';
         renderOrdersTable();
+    });
+
+    tabAppearanceBtn.addEventListener('click', () => {
+        tabAppearanceBtn.classList.add('primary');
+        tabProductsBtn.classList.remove('primary');
+        tabOrdersBtn.classList.remove('primary');
+        tabProductsPane.style.display = 'none';
+        tabOrdersPane.style.display = 'none';
+        tabAppearancePane.style.display = 'flex';
+
+        // Load current config
+        configLogoInput.value = localStorage.getItem('tosco_custom_logo') || '../assets/logo.webp';
+        configHeroInput.value = localStorage.getItem('tosco_custom_hero') || '../assets/hero_tosco.png';
+        configTickerInput.value = localStorage.getItem('tosco_custom_ticker') || '3 CUOTAS SIN INTERÉS | ENVÍO GRATIS SUPERANDO LOS $250.000';
+    });
+
+    // Appearance Form Submit
+    appearanceForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        localStorage.setItem('tosco_custom_logo', configLogoInput.value.trim());
+        localStorage.setItem('tosco_custom_hero', configHeroInput.value.trim());
+        localStorage.setItem('tosco_custom_ticker', configTickerInput.value.trim());
+        alert('¡Configuración visual guardada correctamente!');
     });
 }
 
@@ -649,6 +686,30 @@ window.updateOrderStatus = async function(orderId, newStatus) {
     const o = ALL_ORDERS.find(ord => ord.id === orderId);
     if (!o) return;
     
+    // If despachar (set to Activo), request to the serverless function
+    if (newStatus === 'Activo') {
+        try {
+            const res = await fetch('/api/despachar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: o.id,
+                    customer: o.customer,
+                    carrier: o.carrier
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.success) {
+                    o.trackingId = data.tracking_id;
+                    o.labelPdfUrl = data.label_pdf_url;
+                }
+            }
+        } catch (err) {
+            console.error("Error calling api/despachar:", err);
+        }
+    }
+
     o.status = newStatus;
     await dbPutOrder(o);
     await refreshLocalState();
@@ -656,8 +717,12 @@ window.updateOrderStatus = async function(orderId, newStatus) {
 };
 
 window.printShippingLabel = function(orderId) {
-    // Open print view in new tab
-    window.open(`print-label.html?orderId=${orderId}`, '_blank');
+    const o = ALL_ORDERS.find(ord => ord.id === orderId);
+    if (o && o.labelPdfUrl) {
+        window.open(o.labelPdfUrl, '_blank');
+    } else {
+        window.open(`print-label.html?orderId=${orderId}`, '_blank');
+    }
 };
 
 window.deleteOrder = async function(orderId) {
