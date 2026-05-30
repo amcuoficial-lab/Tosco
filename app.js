@@ -672,22 +672,34 @@ function renderProducts() {
         if (p.sizesStock) {
             const availableSizes = Object.entries(p.sizesStock).filter(([size, stock]) => stock > 0);
             if (availableSizes.length > 0) {
+                const defaultSize = availableSizes[0][0];
                 sizeSelectorHtml = `
-                    <div class="product-size-select-wrapper" style="margin-bottom: 12px; text-align: left;">
-                        <label style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 4px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle:</label>
-                        <select class="product-size-select" id="size-select-${p.id}" style="width: 100%; padding: 8px; border: 1px solid var(--gray-medium); border-radius: 4px; font-family: var(--body-font); font-size: 12px; outline: none; background: white; color: var(--main-foreground);">
-                            ${availableSizes.map(([size, stock]) => `<option value="${size}">${size} (${stock} u.)</option>`).join('')}
-                        </select>
+                    <div class="product-size-selector-container" style="margin-bottom: 12px; text-align: left;">
+                        <span class="selected-size-label" id="size-label-${p.id}" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle: ${defaultSize}</span>
+                        <div class="size-buttons-grid" id="size-buttons-${p.id}" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            ${availableSizes.map(([size, stock], idx) => `
+                                <button type="button" class="size-btn ${idx === 0 ? 'active' : ''}" data-product-id="${p.id}" data-size="${size}" onclick="selectProductSize(${p.id}, '${size}', this)" style="border: 2px solid ${idx === 0 ? 'var(--main-foreground)' : 'var(--gray-medium)'}; font-weight: ${idx === 0 ? '700' : '400'};">
+                                    ${size}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <input type="hidden" id="selected-size-input-${p.id}" value="${defaultSize}">
                     </div>
                 `;
             }
         } else if (p.sizes && p.sizes.length > 0) {
+            const defaultSize = p.sizes[0];
             sizeSelectorHtml = `
-                <div class="product-size-select-wrapper" style="margin-bottom: 12px; text-align: left;">
-                    <label style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 4px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle:</label>
-                    <select class="product-size-select" id="size-select-${p.id}" style="width: 100%; padding: 8px; border: 1px solid var(--gray-medium); border-radius: 4px; font-family: var(--body-font); font-size: 12px; outline: none; background: white; color: var(--main-foreground);">
-                        ${p.sizes.map(size => `<option value="${size}">${size}</option>`).join('')}
-                    </select>
+                <div class="product-size-selector-container" style="margin-bottom: 12px; text-align: left;">
+                    <span class="selected-size-label" id="size-label-${p.id}" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle: ${defaultSize}</span>
+                    <div class="size-buttons-grid" id="size-buttons-${p.id}" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        ${p.sizes.map((size, idx) => `
+                            <button type="button" class="size-btn ${idx === 0 ? 'active' : ''}" data-product-id="${p.id}" data-size="${size}" onclick="selectProductSize(${p.id}, '${size}', this)" style="border: 2px solid ${idx === 0 ? 'var(--main-foreground)' : 'var(--gray-medium)'}; font-weight: ${idx === 0 ? '700' : '400'};">
+                                ${size}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <input type="hidden" id="selected-size-input-${p.id}" value="${defaultSize}">
                 </div>
             `;
         }
@@ -768,6 +780,29 @@ function scrollToCatalog() {
     }
 }
 
+// Select size helper
+window.selectProductSize = function(productId, size, btn) {
+    const input = document.getElementById(`selected-size-input-${productId}`);
+    if (input) input.value = size;
+
+    const label = document.getElementById(`size-label-${productId}`);
+    if (label) label.innerText = `Talle: ${size}`;
+
+    const container = document.getElementById(`size-buttons-${productId}`);
+    if (container) {
+        container.querySelectorAll('.size-btn').forEach(b => {
+            b.classList.remove('active');
+            b.style.borderColor = 'var(--gray-medium)';
+            b.style.borderWidth = '1px';
+            b.style.fontWeight = '400';
+        });
+    }
+    btn.classList.add('active');
+    btn.style.borderColor = 'var(--main-foreground)';
+    btn.style.borderWidth = '2px';
+    btn.style.fontWeight = '700';
+};
+
 // CART HANDLERS
 window.addToCart = function(productId) {
     const product = ALL_PRODUCTS.find(p => p.id === productId);
@@ -779,8 +814,8 @@ window.addToCart = function(productId) {
     }
 
     // Read selected size
-    const sizeSelect = document.getElementById(`size-select-${productId}`);
-    const selectedSize = sizeSelect ? sizeSelect.value : 'Único';
+    const sizeInput = document.getElementById(`selected-size-input-${productId}`);
+    const selectedSize = sizeInput ? sizeInput.value : 'Único';
 
     // Verify stock for specific size
     if (product.sizesStock && product.sizesStock[selectedSize] !== undefined) {
