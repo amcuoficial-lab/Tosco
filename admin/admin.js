@@ -218,7 +218,7 @@ let adminProductsTbody, adminSearchInput, adminAddProductBtn, adminExportBtn, ad
 let adminOrdersTbody, orderFilterAll, orderFilterPending, orderFilterActive, orderFilterCompleted;
 
 // Admin modal form
-let productModalContainer, modalTitle, modalCloseBtn, productForm, formProductId, formName, formBrand, formCategory, formSubcategory, formPrice, formOriginalPrice, formStock, formImage, formSizes, formLabels, formCancelBtn;
+let productModalContainer, modalTitle, modalCloseBtn, productForm, formProductId, formName, formBrand, formCategory, formSubcategory, formPrice, formOriginalPrice, formStock, formImage, sizesStockContainer, addSizeStockRowBtn, formLabels, formCancelBtn;
 
 // Admin stats
 let statTotalEl, statOutOfStockEl, statSalesEl, statShippingEl;
@@ -274,7 +274,8 @@ function initDOMElements() {
     formOriginalPrice = document.getElementById('form-original-price');
     formStock = document.getElementById('form-stock');
     formImage = document.getElementById('form-image');
-    formSizes = document.getElementById('form-sizes');
+    sizesStockContainer = document.getElementById('sizes-stock-container');
+    addSizeStockRowBtn = document.getElementById('add-size-stock-row');
     formLabels = document.getElementById('form-labels');
     formCancelBtn = document.getElementById('form-cancel-btn');
 
@@ -587,6 +588,56 @@ function setupAdminEventListeners() {
             reader.readAsDataURL(file);
         }
     });
+
+    // Add size stock row listener
+    addSizeStockRowBtn.addEventListener('click', () => {
+        createSizeStockRow('', 0);
+    });
+
+    // Category change listener to populate default sizes for calzado
+    formCategory.addEventListener('change', () => {
+        const pid = formProductId.value;
+        const isEdit = pid !== '';
+        if (!isEdit) {
+            sizesStockContainer.innerHTML = '';
+            if (formCategory.value === 'calzado') {
+                createSizeStockRow('36', 5);
+                createSizeStockRow('37', 5);
+                createSizeStockRow('38', 5);
+                createSizeStockRow('39', 5);
+                createSizeStockRow('40', 5);
+            } else {
+                createSizeStockRow('Único', 10);
+            }
+        }
+    });
+}
+
+function createSizeStockRow(size = '', stock = 0) {
+    const row = document.createElement('div');
+    row.className = 'size-stock-row';
+    row.style.display = 'flex';
+    row.style.gap = '10px';
+    row.style.alignItems = 'center';
+    row.innerHTML = `
+        <input type="text" class="row-size-input" required placeholder="Talle (ej: 38)" value="${size}" style="flex:1; padding:8px; border:1px solid var(--gray-medium); border-radius:4px; font-family:'Lato',sans-serif;">
+        <input type="number" class="row-stock-input" required min="0" placeholder="Stock" value="${stock}" style="width:100px; padding:8px; border:1px solid var(--gray-medium); border-radius:4px; font-family:'Lato',sans-serif;">
+        <button type="button" class="btn-table-action delete" style="padding:8px 12px; margin:0;" onclick="this.parentElement.remove(); recalculateTotalStock();"><i class="fa-regular fa-trash-can"></i></button>
+    `;
+    
+    row.querySelector('.row-stock-input').addEventListener('input', recalculateTotalStock);
+    row.querySelector('.row-size-input').addEventListener('input', recalculateTotalStock);
+    
+    sizesStockContainer.appendChild(row);
+    recalculateTotalStock();
+}
+
+function recalculateTotalStock() {
+    let total = 0;
+    document.querySelectorAll('.row-stock-input').forEach(input => {
+        total += parseInt(input.value) || 0;
+    });
+    formStock.value = total;
 }
 
 function setupOrderTabsListeners() {
@@ -641,9 +692,18 @@ function renderAdminTable() {
     filtered.forEach(p => {
         const labelsHtml = p.labels.map(l => `<span class="label-pill ${l.toLowerCase().includes('envío') || l.toLowerCase().includes('gratis') ? 'free-shipping' : 'offer'}" style="margin-right: 4px; display: inline-block;">${l}</span>`).join('');
         
+        let breakdown = '';
+        if (p.sizesStock) {
+            breakdown = '<div style="font-size:11px; color:#7f8c8d; margin-top:4px; line-height:1.2;">' + 
+                Object.entries(p.sizesStock)
+                    .map(([sz, stk]) => `<strong>${sz}</strong>:${stk}`)
+                    .join(', ') + 
+                '</div>';
+        }
+        
         const stockDisplay = p.stock === 0 
             ? `<span style="color: #c0392b; font-weight: 700; background-color: #fce8e6; padding: 4px 8px; border-radius: 4px;">Sin Stock</span>` 
-            : `<span style="font-weight: 600; color: #2c3e50;">${p.stock} u.</span>`;
+            : `<span style="font-weight: 600; color: #2c3e50;">${p.stock} u.</span>` + breakdown;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -788,6 +848,7 @@ window.deleteOrder = async function(orderId) {
 window.openProductModal = function(productId) {
     productModalContainer.style.display = 'flex';
     formImageFileName.innerText = 'Ningún archivo seleccionado';
+    sizesStockContainer.innerHTML = '';
     
     if (productId) {
         // Edit Mode
@@ -802,11 +863,25 @@ window.openProductModal = function(productId) {
         formSubcategory.value = p.subcategory;
         formPrice.value = p.price;
         formOriginalPrice.value = p.originalPrice || '';
-        formStock.value = p.stock !== undefined ? p.stock : 10;
+        formStock.value = p.stock !== undefined ? p.stock : 0;
         formImage.value = p.image;
         formImagePreview.src = p.image;
-        formSizes.value = p.sizes ? p.sizes.join(', ') : 'Único';
         formLabels.value = p.labels ? p.labels.join(', ') : '';
+
+        // Load size-stock rows
+        if (p.sizesStock) {
+            Object.keys(p.sizesStock).forEach(size => {
+                createSizeStockRow(size, p.sizesStock[size]);
+            });
+        } else if (p.sizes && p.sizes.length > 0) {
+            // Legacy product fallback
+            const stockPerSize = Math.floor((p.stock || 10) / p.sizes.length);
+            p.sizes.forEach(size => {
+                createSizeStockRow(size, stockPerSize || 1);
+            });
+        } else {
+            createSizeStockRow('Único', p.stock || 10);
+        }
     } else {
         // Add Mode
         modalTitle.innerText = "Agregar Nuevo Producto";
@@ -814,6 +889,13 @@ window.openProductModal = function(productId) {
         formProductId.value = '';
         formImagePreview.src = '../assets/hero_tosco.png';
         formImage.value = '';
+        
+        // Default rows for shoe/cloth sizes
+        createSizeStockRow('36', 5);
+        createSizeStockRow('37', 5);
+        createSizeStockRow('38', 5);
+        createSizeStockRow('39', 5);
+        createSizeStockRow('40', 5);
     }
 };
 
@@ -827,14 +909,24 @@ async function saveProductForm(e) {
     const pid = formProductId.value;
     const isEdit = pid !== '';
     
-    // Parse sizes
-    let sizesArr = formSizes.value.split(',').map(s => s.trim()).filter(s => s !== '');
-    if (sizesArr.length === 0) sizesArr = ["Único"];
-    else {
-        sizesArr = sizesArr.map(s => {
-            const parsed = parseInt(s);
-            return isNaN(parsed) ? s : parsed;
-        });
+    // Parse dynamic sizes and stocks
+    const sizesStock = {};
+    let sizesArr = [];
+    let stockVal = 0;
+
+    document.querySelectorAll('.size-stock-row').forEach(row => {
+        const size = row.querySelector('.row-size-input').value.trim();
+        const stock = parseInt(row.querySelector('.row-stock-input').value) || 0;
+        if (size !== '') {
+            sizesStock[size] = stock;
+            sizesArr.push(isNaN(parseInt(size)) ? size : parseInt(size));
+            stockVal += stock;
+        }
+    });
+
+    if (sizesArr.length === 0) {
+        sizesStock['Único'] = 0;
+        sizesArr = ['Único'];
     }
 
     // Parse labels
@@ -842,7 +934,6 @@ async function saveProductForm(e) {
     
     const priceVal = parseInt(formPrice.value);
     const origPriceVal = formOriginalPrice.value ? parseInt(formOriginalPrice.value) : null;
-    const stockVal = parseInt(formStock.value);
     
     // Auto labels helper
     if (priceVal > 250000 && !labelsArr.some(l => l.toLowerCase().includes('envío') || l.toLowerCase().includes('gratis'))) {
@@ -858,6 +949,7 @@ async function saveProductForm(e) {
         price: priceVal,
         originalPrice: origPriceVal,
         stock: stockVal,
+        sizesStock: sizesStock,
         image: formImage.value.trim(),
         labels: labelsArr,
         sizes: sizesArr

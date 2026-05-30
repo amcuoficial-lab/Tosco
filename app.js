@@ -208,6 +208,7 @@ let apiShippingRates = {
     Andreani: 9500,
     'Correo Argentino': 7800
 };
+let loggedInUserEmail = localStorage.getItem('tosco_logged_user') || null;
 
 // DOM ELEMENTS
 const productsGrid = document.getElementById('products-grid');
@@ -249,6 +250,19 @@ const checkoutCancelBtn = document.getElementById('checkout-cancel-btn');
 const checkoutSubtotal = document.getElementById('checkout-subtotal');
 const checkoutShipping = document.getElementById('checkout-shipping');
 const checkoutTotal = document.getElementById('checkout-total');
+
+// Client Auth Modal DOM Elements
+const userProfileBtn = document.getElementById('user-profile-btn');
+const userEmailHeader = document.getElementById('user-email-header');
+const authModalContainer = document.getElementById('auth-modal-container');
+const authCloseBtn = document.getElementById('auth-close-btn');
+const authEmailForm = document.getElementById('auth-email-form');
+const authOtpForm = document.getElementById('auth-otp-form');
+const authEmailInput = document.getElementById('auth-email');
+const authCodeInput = document.getElementById('auth-code');
+const authErrorMsg = document.getElementById('auth-error-msg');
+const authBackBtn = document.getElementById('auth-back-btn');
+
 
 // ORDER DB CONTROLLER
 function dbPutOrder(order) {
@@ -384,6 +398,7 @@ function applyCustomAppearance() {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         applyCustomAppearance();
+        updateAuthHeader();
         
         // Check if returning from Mercado Pago with a successful payment
         const urlParams = new URLSearchParams(window.location.search);
@@ -405,6 +420,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Fallback to offline memory
         ALL_PRODUCTS = INITIAL_PRODUCTS;
         applyCustomAppearance();
+        updateAuthHeader();
         renderProducts();
         updateCartUI();
         setupEventListeners();
@@ -430,6 +446,7 @@ function setupEventListeners() {
         closeMobileMenu();
         closeAiChat();
         closeCheckoutModal();
+        closeAuthModal();
     });
 
     // AI Chat UI Toggles
@@ -502,6 +519,83 @@ function setupEventListeners() {
             }
         });
     }
+
+    // Client Authentication Modal Listeners
+    if (userProfileBtn) userProfileBtn.addEventListener('click', handleProfileClick);
+    if (authCloseBtn) authCloseBtn.addEventListener('click', closeAuthModal);
+    if (authBackBtn) authBackBtn.addEventListener('click', resetAuthModalForms);
+    
+    if (authEmailForm) {
+        authEmailForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const emailVal = authEmailInput.value.trim();
+            if (!emailVal) return;
+
+            try {
+                const response = await fetch('/api/send-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailVal })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    sessionStorage.setItem('tosco_auth_email', emailVal);
+                    
+                    // Show OTP form and hide Email form
+                    authEmailForm.style.display = 'none';
+                    authOtpForm.style.display = 'flex';
+                    authErrorMsg.style.display = 'none';
+
+                    // For demo/sandbox simulation if Resend API key is not configured, show code in alert
+                    if (data.mode === 'sandbox_simulation' || data.code) {
+                        alert(`[MODO PRUEBA] Tu código de verificación OTP es: ${data.code}`);
+                    } else {
+                        alert('Te hemos enviado un código de verificación de 6 dígitos a tu correo electrónico.');
+                    }
+                } else {
+                    const err = await response.json();
+                    alert(err.error || 'Error al enviar código.');
+                }
+            } catch (err) {
+                console.error("Auth send OTP error:", err);
+                alert("Error de conexión al enviar el código.");
+            }
+        });
+    }
+
+    if (authOtpForm) {
+        authOtpForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const emailVal = sessionStorage.getItem('tosco_auth_email');
+            const codeVal = authCodeInput.value.trim();
+            if (!emailVal || !codeVal) return;
+
+            try {
+                const response = await fetch('/api/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: emailVal, code: codeVal })
+                });
+
+                if (response.ok) {
+                    localStorage.setItem('tosco_logged_user', emailVal);
+                    loggedInUserEmail = emailVal;
+                    updateAuthHeader();
+                    closeAuthModal();
+                    alert('¡Sesión iniciada con éxito!');
+                } else {
+                    const err = await response.json();
+                    authErrorMsg.innerText = err.error || 'Código incorrecto.';
+                    authErrorMsg.style.display = 'block';
+                }
+            } catch (err) {
+                console.error("Auth verification error:", err);
+                authErrorMsg.innerText = "Error de conexión al verificar.";
+                authErrorMsg.style.display = 'block';
+            }
+        });
+    }
 }
 
 
@@ -540,7 +634,13 @@ function renderProducts() {
     }
 
     filtered.forEach(p => {
-        const labelsHtml = p.labels.map(l => `<span class="label-pill ${l.toLowerCase().includes('envío') || l.toLowerCase().includes('gratis') ? 'free-shipping' : 'offer'}">${l}</span>`).join('');
+        // Exclude specific badge stamps from regular list tags to avoid duplication
+        const cleanLabels = p.labels.filter(l => {
+            const lowerL = l.toLowerCase();
+            return !lowerL.includes('pocos') && !lowerL.includes('par') && !lowerL.includes('top') && !lowerL.includes('venta');
+        });
+
+        const labelsHtml = cleanLabels.map(l => `<span class="label-pill ${l.toLowerCase().includes('envío') || l.toLowerCase().includes('gratis') ? 'free-shipping' : 'offer'}">${l}</span>`).join('');
         
         const priceHtml = p.originalPrice 
             ? `<div class="product-price">
@@ -553,11 +653,51 @@ function renderProducts() {
         const isOutOfStock = p.stock !== undefined && p.stock <= 0;
         const outOfStockOverlay = isOutOfStock ? `<div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.6); display:flex; align-items:center; justify-content:center; font-family:var(--heading-font); font-weight:bold; color:#c0392b; font-size:14px; letter-spacing:1px; z-index:3;">SIN STOCK</div>` : '';
 
+        // Build premium badge overlays (Pocos pares / Top ventas)
+        let badgesOverlayHtml = '';
+        const lowerLabels = p.labels.map(l => l.toLowerCase().trim());
+        const hasPocosParesTag = lowerLabels.some(l => l.includes('pocos') || l.includes('par'));
+        const hasTopVentasTag = lowerLabels.some(l => l.includes('top') || l.includes('venta'));
+        const isLowStock = p.stock !== undefined && p.stock > 0 && p.stock <= 3;
+
+        if (hasPocosParesTag || isLowStock) {
+            badgesOverlayHtml += `<div class="badge-stamp pocos-pares"><i class="fa-solid fa-fire"></i> Pocos Pares</div>`;
+        }
+        if (hasTopVentasTag) {
+            badgesOverlayHtml += `<div class="badge-stamp top-ventas"><i class="fa-solid fa-arrow-trend-up"></i> Top Ventas</div>`;
+        }
+        const badgeWrapper = badgesOverlayHtml !== '' ? `<div class="product-badge-overlay">${badgesOverlayHtml}</div>` : '';
+
+        let sizeSelectorHtml = '';
+        if (p.sizesStock) {
+            const availableSizes = Object.entries(p.sizesStock).filter(([size, stock]) => stock > 0);
+            if (availableSizes.length > 0) {
+                sizeSelectorHtml = `
+                    <div class="product-size-select-wrapper" style="margin-bottom: 12px; text-align: left;">
+                        <label style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 4px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle:</label>
+                        <select class="product-size-select" id="size-select-${p.id}" style="width: 100%; padding: 8px; border: 1px solid var(--gray-medium); border-radius: 4px; font-family: var(--body-font); font-size: 12px; outline: none; background: white; color: var(--main-foreground);">
+                            ${availableSizes.map(([size, stock]) => `<option value="${size}">${size} (${stock} u.)</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            }
+        } else if (p.sizes && p.sizes.length > 0) {
+            sizeSelectorHtml = `
+                <div class="product-size-select-wrapper" style="margin-bottom: 12px; text-align: left;">
+                    <label style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 4px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle:</label>
+                    <select class="product-size-select" id="size-select-${p.id}" style="width: 100%; padding: 8px; border: 1px solid var(--gray-medium); border-radius: 4px; font-family: var(--body-font); font-size: 12px; outline: none; background: white; color: var(--main-foreground);">
+                        ${p.sizes.map(size => `<option value="${size}">${size}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        }
+
         const card = document.createElement('div');
         card.className = 'product-card animate-fade';
         card.innerHTML = `
             <div class="product-image-wrapper">
                 <div class="product-labels">${labelsHtml}</div>
+                ${badgeWrapper}
                 ${outOfStockOverlay}
                 <img src="${p.image}" alt="${p.name}" class="product-img" onerror="this.src='assets/hero_tosco.png'">
             </div>
@@ -565,6 +705,7 @@ function renderProducts() {
                 <div class="product-category">${p.brand} | ${p.subcategory}</div>
                 <h3 class="product-name">${p.name}</h3>
                 ${priceHtml}
+                ${sizeSelectorHtml}
                 <button class="product-action-btn" onclick="addToCart(${p.id})" ${isOutOfStock ? 'disabled style="background:var(--gray-medium); color:var(--gray-dark); cursor:not-allowed;"' : ''}>
                     ${isOutOfStock ? 'Sin Stock' : 'Agregar al Carrito'}
                 </button>
@@ -637,7 +778,27 @@ window.addToCart = function(productId) {
         return;
     }
 
-    const existing = cart.find(item => item.id === productId);
+    // Read selected size
+    const sizeSelect = document.getElementById(`size-select-${productId}`);
+    const selectedSize = sizeSelect ? sizeSelect.value : 'Único';
+
+    // Verify stock for specific size
+    if (product.sizesStock && product.sizesStock[selectedSize] !== undefined) {
+        if (product.sizesStock[selectedSize] <= 0) {
+            alert(`¡Lo sentimos! El talle ${selectedSize} no tiene stock disponible.`);
+            return;
+        }
+        
+        const inCartQty = cart
+            .filter(item => item.id === productId && item.size === selectedSize)
+            .reduce((sum, item) => sum + item.quantity, 0);
+        if (inCartQty >= product.sizesStock[selectedSize]) {
+            alert(`No podés agregar más unidades de talle ${selectedSize}. Stock máximo alcanzado.`);
+            return;
+        }
+    }
+
+    const existing = cart.find(item => item.id === productId && item.size === selectedSize);
     if (existing) {
         existing.quantity += 1;
     } else {
@@ -646,6 +807,7 @@ window.addToCart = function(productId) {
             name: product.name,
             price: product.price,
             image: product.image,
+            size: selectedSize,
             quantity: 1
         });
     }
@@ -682,13 +844,14 @@ function updateCartUI() {
             <img src="${item.image}" alt="${item.name}" class="cart-item-img" onerror="this.src='assets/hero_tosco.png'">
             <div class="cart-item-details">
                 <h4 class="cart-item-name">${item.name}</h4>
+                <div style="font-size:11px; color:var(--gray-dark); margin-bottom:5px;">Talle: ${item.size || 'Único'}</div>
                 <div class="cart-item-price">$${(item.price * item.quantity).toLocaleString('es-AR')}</div>
                 <div class="cart-item-quantity-control">
-                    <button class="qty-btn" onclick="adjustQuantity(${item.id}, -1)">-</button>
+                    <button class="qty-btn" onclick="adjustQuantity(${item.id}, '${item.size || 'Único'}', -1)">-</button>
                     <input type="text" class="qty-input" value="${item.quantity}" readonly>
-                    <button class="qty-btn" onclick="adjustQuantity(${item.id}, 1)">+</button>
+                    <button class="qty-btn" onclick="adjustQuantity(${item.id}, '${item.size || 'Único'}', 1)">+</button>
                 </div>
-                <button class="cart-item-remove" onclick="removeCartItem(${item.id})">Eliminar</button>
+                <button class="cart-item-remove" onclick="removeCartItem(${item.id}, '${item.size || 'Único'}')">Eliminar</button>
             </div>
         `;
         cartItemsContainer.appendChild(itemEl);
@@ -698,21 +861,31 @@ function updateCartUI() {
     updateShippingProgress(subtotal);
 }
 
-window.adjustQuantity = function(productId, amount) {
-    const item = cart.find(i => i.id === productId);
+window.adjustQuantity = function(productId, size, amount) {
+    const item = cart.find(i => i.id === productId && i.size === size);
     if (!item) return;
+
+    if (amount > 0) {
+        const product = ALL_PRODUCTS.find(p => p.id === productId);
+        if (product && product.sizesStock && product.sizesStock[size] !== undefined) {
+            if (item.quantity + amount > product.sizesStock[size]) {
+                alert(`No podés agregar más unidades de talle ${size}. Stock máximo alcanzado.`);
+                return;
+            }
+        }
+    }
 
     item.quantity += amount;
     if (item.quantity <= 0) {
-        removeCartItem(productId);
+        removeCartItem(productId, size);
     } else {
         saveCart();
         updateCartUI();
     }
 };
 
-window.removeCartItem = function(productId) {
-    cart = cart.filter(item => item.id !== productId);
+window.removeCartItem = function(productId, size) {
+    cart = cart.filter(item => !(item.id === productId && item.size === size));
     saveCart();
     updateCartUI();
 };
@@ -866,11 +1039,16 @@ async function completeOrderPlacement(orderData) {
         // Save order to IndexedDB
         await dbPutOrder(orderData);
         
-        // Subtract stock for each product
+        // Subtract stock for each product and size
         const promises = orderData.items.map(async (item) => {
             const p = ALL_PRODUCTS.find(prod => prod.id === item.id);
-            if (p && p.stock !== undefined) {
-                p.stock = Math.max(0, p.stock - item.quantity);
+            if (p) {
+                if (p.sizesStock && item.size && p.sizesStock[item.size] !== undefined) {
+                    p.sizesStock[item.size] = Math.max(0, p.sizesStock[item.size] - item.quantity);
+                }
+                if (p.stock !== undefined) {
+                    p.stock = Math.max(0, p.stock - item.quantity);
+                }
                 await dbPutProduct(p);
             }
         });
@@ -927,7 +1105,8 @@ async function handleCheckoutSubmit(e) {
             name: item.name,
             price: item.price,
             quantity: item.quantity,
-            image: item.image
+            image: item.image,
+            size: item.size || 'Único'
         }))
     };
 
