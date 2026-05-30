@@ -220,9 +220,26 @@ function applyCustomAppearance() {
     }
 }
 
+function checkStoreStatus() {
+    const storeOnline = localStorage.getItem('tosco_store_online') !== 'false';
+    const maintenanceOverlay = document.getElementById('maintenance-overlay');
+    if (maintenanceOverlay) {
+        if (!storeOnline) {
+            maintenanceOverlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        } else {
+            maintenanceOverlay.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    }
+}
+
+window.addEventListener('focus', checkStoreStatus);
+
 // INITIALIZE APP
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        checkStoreStatus();
         applyCustomAppearance();
         updateAuthHeader();
         
@@ -273,7 +290,13 @@ function setupEventListeners() {
         closeAiChat();
         closeCheckoutModal();
         closeAuthModal();
+        closeProductDetail();
     });
+
+    const detailCloseBtn = document.getElementById('product-detail-close-btn');
+    if (detailCloseBtn) {
+        detailCloseBtn.addEventListener('click', closeProductDetail);
+    }
 
     // AI Chat UI Toggles
     aiBubble.addEventListener('click', openAiChat);
@@ -460,7 +483,6 @@ function renderProducts() {
     }
 
     filtered.forEach(p => {
-        // Exclude specific badge stamps from regular list tags to avoid duplication
         const cleanLabels = p.labels.filter(l => {
             const lowerL = l.toLowerCase();
             return !lowerL.includes('pocos') && !lowerL.includes('par') && !lowerL.includes('top') && !lowerL.includes('venta');
@@ -475,11 +497,9 @@ function renderProducts() {
                </div>`
             : `<div class="product-price">$${p.price.toLocaleString('es-AR')}</div>`;
 
-        // Check if out of stock
         const isOutOfStock = p.stock !== undefined && p.stock <= 0;
         const outOfStockOverlay = isOutOfStock ? `<div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.6); display:flex; align-items:center; justify-content:center; font-family:var(--heading-font); font-weight:bold; color:#c0392b; font-size:14px; letter-spacing:1px; z-index:3;">SIN STOCK</div>` : '';
 
-        // Build premium badge overlays (Pocos pares / Top ventas)
         let badgesOverlayHtml = '';
         const lowerLabels = p.labels.map(l => l.toLowerCase().trim());
         const hasPocosParesTag = lowerLabels.some(l => l.includes('pocos') || l.includes('par'));
@@ -494,46 +514,10 @@ function renderProducts() {
         }
         const badgeWrapper = badgesOverlayHtml !== '' ? `<div class="product-badge-overlay">${badgesOverlayHtml}</div>` : '';
 
-        let sizeSelectorHtml = '';
-        if (p.sizesStock) {
-            const availableSizes = Object.entries(p.sizesStock).filter(([size, stock]) => stock > 0);
-            if (availableSizes.length > 0) {
-                const defaultSize = availableSizes[0][0];
-                sizeSelectorHtml = `
-                    <div class="product-size-selector-container" style="margin-bottom: 12px; text-align: left;">
-                        <span class="selected-size-label" id="size-label-${p.id}" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle: ${defaultSize}</span>
-                        <div class="size-buttons-grid" id="size-buttons-${p.id}" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            ${availableSizes.map(([size, stock], idx) => `
-                                <button type="button" class="size-btn ${idx === 0 ? 'active' : ''}" data-product-id="${p.id}" data-size="${size}" onclick="selectProductSize(${p.id}, '${size}', this)" style="border: 2px solid ${idx === 0 ? 'var(--main-foreground)' : 'var(--gray-medium)'}; font-weight: ${idx === 0 ? '700' : '400'};">
-                                    ${size}
-                                </button>
-                            `).join('')}
-                        </div>
-                        <input type="hidden" id="selected-size-input-${p.id}" value="${defaultSize}">
-                    </div>
-                `;
-            }
-        } else if (p.sizes && p.sizes.length > 0) {
-            const defaultSize = p.sizes[0];
-            sizeSelectorHtml = `
-                <div class="product-size-selector-container" style="margin-bottom: 12px; text-align: left;">
-                    <span class="selected-size-label" id="size-label-${p.id}" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle: ${defaultSize}</span>
-                    <div class="size-buttons-grid" id="size-buttons-${p.id}" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        ${p.sizes.map((size, idx) => `
-                            <button type="button" class="size-btn ${idx === 0 ? 'active' : ''}" data-product-id="${p.id}" data-size="${size}" onclick="selectProductSize(${p.id}, '${size}', this)" style="border: 2px solid ${idx === 0 ? 'var(--main-foreground)' : 'var(--gray-medium)'}; font-weight: ${idx === 0 ? '700' : '400'};">
-                                ${size}
-                            </button>
-                        `).join('')}
-                    </div>
-                    <input type="hidden" id="selected-size-input-${p.id}" value="${defaultSize}">
-                </div>
-            `;
-        }
-
         const card = document.createElement('div');
         card.className = 'product-card animate-fade';
         card.innerHTML = `
-            <div class="product-image-wrapper">
+            <div class="product-image-wrapper" onclick="openProductDetail(${p.id})">
                 <div class="product-labels">${labelsHtml}</div>
                 ${badgeWrapper}
                 ${outOfStockOverlay}
@@ -541,11 +525,10 @@ function renderProducts() {
             </div>
             <div class="product-info">
                 <div class="product-category">${p.brand} | ${p.subcategory}</div>
-                <h3 class="product-name">${p.name}</h3>
+                <h3 class="product-name" onclick="openProductDetail(${p.id})" style="cursor:pointer;">${p.name}</h3>
                 ${priceHtml}
-                ${sizeSelectorHtml}
-                <button class="product-action-btn" onclick="addToCart(${p.id})" ${isOutOfStock ? 'disabled style="background:var(--gray-medium); color:var(--gray-dark); cursor:not-allowed;"' : ''}>
-                    ${isOutOfStock ? 'Sin Stock' : 'Agregar al Carrito'}
+                <button class="product-action-btn" onclick="openProductDetail(${p.id})" ${isOutOfStock ? 'disabled style="background:var(--gray-medium); color:var(--gray-dark); cursor:not-allowed;"' : ''}>
+                    ${isOutOfStock ? 'Sin Stock' : 'Ver Producto / Comprar'}
                 </button>
             </div>
         `;
@@ -993,10 +976,7 @@ async function handleCheckoutSubmit(e) {
         const data = await response.json();
         
         if (data && data.success && data.init_point) {
-            // Save temporary order in session storage to rebuild upon successful return
             sessionStorage.setItem('tosco_temp_order', JSON.stringify(orderData));
-            
-            // Redirect customer to Mercado Pago checkout
             window.location.href = data.init_point;
         } else {
             throw new Error("No init_point returned from payment gateway.");
@@ -1006,3 +986,177 @@ async function handleCheckoutSubmit(e) {
         alert("Ocurrió un error al procesar el pago con Mercado Pago.");
     }
 }
+
+// PRODUCT DETAIL MODAL CONTROLLER
+window.openProductDetail = function(productId) {
+    const p = ALL_PRODUCTS.find(prod => prod.id === productId);
+    if (!p) return;
+
+    const modal = document.getElementById('product-detail-modal-container');
+    const breadcrumb = document.getElementById('detail-breadcrumb');
+    const body = document.getElementById('product-detail-body');
+
+    breadcrumb.innerText = `Inicio . ${p.category} . ${p.brand} . ${p.subcategory}`;
+
+    const isOutOfStock = p.stock !== undefined && p.stock <= 0;
+    let sizesHtml = '';
+    let defaultSize = 'Único';
+    
+    if (p.sizesStock) {
+        const availableSizes = Object.entries(p.sizesStock).filter(([size, stock]) => stock > 0);
+        if (availableSizes.length > 0) {
+            defaultSize = availableSizes[0][0];
+            sizesHtml = `
+                <div style="margin-top: 15px;">
+                    <span id="detail-size-label" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle: ${defaultSize}</span>
+                    <div id="detail-size-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        ${availableSizes.map(([size, stock], idx) => `
+                            <button type="button" class="size-btn ${idx === 0 ? 'active' : ''}" onclick="selectDetailSize(${p.id}, '${size}', this)" style="border: 2px solid ${idx === 0 ? 'var(--main-foreground)' : 'var(--gray-medium)'}; font-weight: ${idx === 0 ? '700' : '400'};">
+                                ${size}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    } else if (p.sizes && p.sizes.length > 0) {
+        defaultSize = p.sizes[0];
+        sizesHtml = `
+            <div style="margin-top: 15px;">
+                <span id="detail-size-label" style="font-size: 11px; font-weight: 700; display: block; margin-bottom: 6px; color: var(--main-foreground); text-transform: uppercase; letter-spacing: 0.5px;">Talle: ${defaultSize}</span>
+                <div id="detail-size-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    ${p.sizes.map((size, idx) => `
+                        <button type="button" class="size-btn ${idx === 0 ? 'active' : ''}" onclick="selectDetailSize(${p.id}, '${size}', this)" style="border: 2px solid ${idx === 0 ? 'var(--main-foreground)' : 'var(--gray-medium)'}; font-weight: ${idx === 0 ? '700' : '400'};">
+                            ${size}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    const transferDiscountPrice = Math.round(p.price * 0.9);
+    const threeInstallmentsPrice = Math.round(p.price / 3);
+
+    body.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+            <img src="${p.image}" alt="${p.name}" style="width: 100%; max-height: 250px; object-fit: cover; border-radius: 6px;" onerror="this.src='assets/hero_tosco.png'">
+        </div>
+        <div>
+            <h2 style="font-family: var(--heading-font); font-size: 20px; font-weight: 700; margin-bottom: 5px; color: var(--main-foreground);">${p.name}</h2>
+            
+            <div style="font-size: 22px; font-weight: 700; color: var(--main-foreground); margin-bottom: 12px;">
+                ${p.originalPrice ? `<span style="text-decoration: line-through; color: var(--gray-dark); margin-right: 10px; font-size: 14px;">$${p.originalPrice.toLocaleString('es-AR')}</span>` : ''}
+                $${p.price.toLocaleString('es-AR')}
+            </div>
+
+            <div style="background-color: #fdfbf7; padding: 12px; border-radius: 6px; border: 1px dashed var(--primary-color); display: flex; flex-direction: column; gap: 6px; font-size: 11px; margin-bottom: 15px; text-align: left; line-height: 1.4;">
+                <span style="color: #c0392b; font-weight: bold;">$${transferDiscountPrice.toLocaleString('es-AR')} por Transferencia / Efectivo (10% OFF)</span>
+                <span>3 cuotas sin interés de <strong>$${threeInstallmentsPrice.toLocaleString('es-AR')}</strong></span>
+                <span style="color: #50664c; font-weight: bold;"><i class="fa-solid fa-credit-card"></i> 3 Cuotas sin interés con todas las tarjetas</span>
+            </div>
+
+            ${sizesHtml}
+
+            <div style="display: flex; align-items: center; gap: 15px; margin-top: 20px;">
+                <div class="cart-item-quantity-control" style="border: 1px solid var(--gray-medium); display: flex; align-items: center; border-radius: 4px; background: white;">
+                    <button class="qty-btn" onclick="adjustDetailQty(-1)" style="width: 35px; height: 35px; background: none; border: none; cursor: pointer; font-size: 16px; color: var(--main-foreground);">-</button>
+                    <input type="text" id="detail-qty-input" value="1" readonly style="width: 35px; text-align: center; border: none; font-size: 13px; font-weight: bold; color: var(--main-foreground); background: transparent; outline: none;">
+                    <button class="qty-btn" onclick="adjustDetailQty(1)" style="width: 35px; height: 35px; background: none; border: none; cursor: pointer; font-size: 16px; color: var(--main-foreground);">+</button>
+                </div>
+                
+                <button class="btn-premium" id="detail-add-to-cart-btn" onclick="addDetailToCart(${p.id})" style="flex: 1; padding: 12px; font-size: 12px; height: 37px; border-radius: 4px;" ${isOutOfStock ? 'disabled style="background:var(--gray-medium); color:var(--gray-dark); cursor:not-allowed;"' : ''}>
+                    ${isOutOfStock ? 'Sin Stock' : 'Agregar al carrito'}
+                </button>
+            </div>
+            
+            <input type="hidden" id="detail-selected-size" value="${defaultSize}">
+            
+            <a href="https://wa.me/5492284620258?text=Hola,%20estoy%20interesado%20en%20el%20producto%20${encodeURIComponent(p.name)}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 15px; padding: 12px; background-color: #25d366; color: white; border-radius: 4px; font-weight: bold; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; transition: var(--transition-smooth); width: 100%;">
+                <i class="fa-brands fa-whatsapp" style="font-size: 16px;"></i> Preguntar por WhatsApp
+            </a>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeProductDetail = function() {
+    const modal = document.getElementById('product-detail-modal-container');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+};
+
+window.selectDetailSize = function(productId, size, btn) {
+    const input = document.getElementById('detail-selected-size');
+    if (input) input.value = size;
+
+    const label = document.getElementById('detail-size-label');
+    if (label) label.innerText = `Talle: ${size}`;
+
+    const container = document.getElementById('detail-size-buttons');
+    if (container) {
+        container.querySelectorAll('.size-btn').forEach(b => {
+            b.classList.remove('active');
+            b.style.borderColor = 'var(--gray-medium)';
+            b.style.borderWidth = '1px';
+            b.style.fontWeight = '400';
+        });
+    }
+    btn.classList.add('active');
+    btn.style.borderColor = 'var(--main-foreground)';
+    btn.style.borderWidth = '2px';
+    btn.style.fontWeight = '700';
+};
+
+window.adjustDetailQty = function(amount) {
+    const qtyInput = document.getElementById('detail-qty-input');
+    if (!qtyInput) return;
+    let qty = parseInt(qtyInput.value) || 1;
+    qty = Math.max(1, qty + amount);
+    qtyInput.value = qty;
+};
+
+window.addDetailToCart = function(productId) {
+    const product = ALL_PRODUCTS.find(p => p.id === productId);
+    if (!product) return;
+
+    const selectedSize = document.getElementById('detail-selected-size').value;
+    const qtyVal = parseInt(document.getElementById('detail-qty-input').value) || 1;
+
+    // Verify stock
+    if (product.sizesStock && product.sizesStock[selectedSize] !== undefined) {
+        if (product.sizesStock[selectedSize] <= 0) {
+            alert(`¡Lo sentimos! El talle ${selectedSize} no tiene stock disponible.`);
+            return;
+        }
+        
+        const inCartQty = cart
+            .filter(item => item.id === productId && item.size === selectedSize)
+            .reduce((sum, item) => sum + item.quantity, 0);
+        if (inCartQty + qtyVal > product.sizesStock[selectedSize]) {
+            alert(`No podés agregar más unidades de talle ${selectedSize}. Stock máximo alcanzado.`);
+            return;
+        }
+    }
+
+    const existing = cart.find(item => item.id === productId && item.size === selectedSize);
+    if (existing) {
+        existing.quantity += qtyVal;
+    } else {
+        cart.push({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            image: product.image,
+            size: selectedSize,
+            quantity: qtyVal
+        });
+    }
+
+    saveCart();
+    updateCartUI();
+    closeProductDetail();
+    openCart();
+};
