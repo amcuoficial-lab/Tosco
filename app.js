@@ -384,6 +384,18 @@ function applyCustomAppearance() {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         applyCustomAppearance();
+        
+        // Check if returning from Mercado Pago with a successful payment
+        const urlParams = new URLSearchParams(window.location.search);
+        const paymentStatus = urlParams.get('payment');
+        if (paymentStatus === 'success' || paymentStatus === 'success_simulated') {
+            const tempOrder = JSON.parse(sessionStorage.getItem('tosco_temp_order'));
+            if (tempOrder) {
+                await completeOrderPlacement(tempOrder);
+                return;
+            }
+        }
+
         await dbInit();
         await refreshLocalState();
         updateCartUI();
@@ -846,6 +858,45 @@ window.checkoutAlert = function() {
     openCheckoutModal();
 };
 
+async function completeOrderPlacement(orderData) {
+    try {
+        // Ensure DB is ready
+        if (!db) await dbInit();
+        
+        // Save order to IndexedDB
+        await dbPutOrder(orderData);
+        
+        // Subtract stock for each product
+        const promises = orderData.items.map(async (item) => {
+            const p = ALL_PRODUCTS.find(prod => prod.id === item.id);
+            if (p && p.stock !== undefined) {
+                p.stock = Math.max(0, p.stock - item.quantity);
+                await dbPutProduct(p);
+            }
+        });
+        await Promise.all(promises);
+
+        // Update monthly sales in localStorage
+        let monthlySales = parseFloat(localStorage.getItem('tosco_monthly_sales')) || 389200;
+        monthlySales += orderData.subtotal;
+        localStorage.setItem('tosco_monthly_sales', monthlySales);
+
+        alert(`¡Pago acreditado con éxito! Tu pedido #${orderData.id} ha sido registrado. Envío por ${orderData.carrier}.`);
+        
+        // Clean cart, session and reload
+        cart = [];
+        saveCart();
+        updateCartUI();
+        sessionStorage.removeItem('tosco_temp_order');
+        
+        // Redirect to clean URL
+        window.location.href = window.location.origin + window.location.pathname;
+    } catch (err) {
+        console.error("Error completing checkout: ", err);
+        alert("Ocurrió un error al registrar el pedido post-pago.");
+    }
+}
+
 async function handleCheckoutSubmit(e) {
     e.preventDefault();
     
@@ -855,6 +906,7 @@ async function handleCheckoutSubmit(e) {
     const shippingCost = isFree ? 0 : (selectedCarrier === 'Andreani' ? (apiShippingRates.Andreani || 9500) : (apiShippingRates['Correo Argentino'] || 7800));
     
     const orderData = {
+        id: Date.now(),
         date: new Date().toISOString(),
         status: "Pendiente",
         customer: {
@@ -880,35 +932,37 @@ async function handleCheckoutSubmit(e) {
     };
 
     try {
-        // Save order to IndexedDB
-        await dbPutOrder(orderData);
-        
-        // Subtract stock for each product
-        const promises = cart.map(async (item) => {
-            const p = ALL_PRODUCTS.find(prod => prod.id === item.id);
-            if (p && p.stock !== undefined) {
-                p.stock = Math.max(0, p.stock - item.quantity);
-                await dbPutProduct(p);
-            }
+        // Request payment checkout preference from serverless API
+        const response = await fetch('/api/create-preference', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                items: orderData.items,
+                shippingCost: orderData.shippingCost,
+                customer: orderData.customer
+            })
         });
-        
-        await Promise.all(promises);
 
-        // Update monthly sales in localStorage
-        let monthlySales = parseFloat(localStorage.getItem('tosco_monthly_sales')) || 389200;
-        monthlySales += subtotal;
-        localStorage.setItem('tosco_monthly_sales', monthlySales);
+        if (!response.ok) {
+            const errData = await response.text();
+            throw new Error(`Preference creation failed: ${errData}`);
+        }
 
-        alert(`¡Pedido realizado con éxito! Su pedido se ha registrado con el método de envío: ${selectedCarrier}.`);
+        const data = await response.json();
         
-        // Clean cart and reload
-        cart = [];
-        saveCart();
-        updateCartUI();
-        closeCheckoutModal();
-        await refreshLocalState();
+        if (data && data.success && data.init_point) {
+            // Save temporary order in session storage to rebuild upon successful return
+            sessionStorage.setItem('tosco_temp_order', JSON.stringify(orderData));
+            
+            // Redirect customer to Mercado Pago checkout
+            window.location.href = data.init_point;
+        } else {
+            throw new Error("No init_point returned from payment gateway.");
+        }
     } catch (err) {
-        console.error("Error creating order: ", err);
-        alert("Ocurrió un error al procesar la compra.");
+        console.error("Error creating payment: ", err);
+        alert("Ocurrió un error al procesar el pago con Mercado Pago.");
     }
 }
